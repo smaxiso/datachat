@@ -46,6 +46,98 @@ class BaseLLMProvider(ABC):
     
     Supports multiple LLM backends (OpenAI, Anthropic, Ollama, etc.)
     """
+
+    # Enhanced Prompt Templates
+    SQL_GENERATION_PROMPT = """You are an expert SQL Data Analyst. Your goal is to generate a precise, syntactically correct SQL query to answer the user's question based on the provided schema.
+
+Database Schema:
+{schema_context}
+
+{examples_section}
+
+Critical Constraints & Rules:
+1. **SQL Only**: Generate ONLY the SQL query. Do not provide explanations, markdown formatting (no ```sql), or comments.
+2. **Syntax**: Use standard SQL. Ensure all tables and columns exist in the schema.
+3. **Joins**: 
+   - Use explicit `JOIN` clauses (e.g., `JOIN table ON table.id = other.id`).
+   - Never use comma-separated tables in `FROM` unless absolutely necessary.
+   - checking for foreign keys in the schema description to determine join conditions.
+4. **Aggregations**: 
+   - When using `COUNT`, `SUM`, `AVG`, `MAX`, `MIN`, you MUST include a `GROUP BY` clause for all non-aggregated columns.
+5. **Filtering**:
+   - Use `WHERE` clauses to filter data.
+   - For strings, handle case-sensitivity if necessary (e.g., `LOWER(col) = 'value'`).
+   - For dates, ensure you compare compatible formats.
+6. **Formatting**:
+   - Use table aliases (e.g., `t1`, `t2` or meaningful abbreviations) for clarity.
+   - Do not include a trailing semicolon `;`.
+
+User Question: {question}
+
+SQL Query:"""
+
+    REFINEMENT_PROMPT = """The following SQL query failed to execute. Your task is to fix the query based on the error message.
+
+Original SQL:
+{original_sql}
+
+Error Message:
+{error_message}
+
+Database Schema:
+{schema_context}
+
+Instructions:
+1. Analyze the error message to identify the issue (e.g., missing column, syntax error, wrong group by).
+2. Refer to the schema to verify table/column names.
+3. Generate the CORRECTED SQL query.
+4. Output ONLY the SQL, no explanations or markdown.
+
+Corrected SQL Query:"""
+
+    INTERPRETATION_PROMPT = """You are a Senior Data Analyst. Interpret the results of the following SQL query to provide actionable business insights.
+
+Original Question: {question}
+
+SQL Query Executed:
+{sql}
+
+Query Results:
+{results_summary}
+
+Instructions:
+1. **Direct Answer**: Start with a direct, concise answer to the question.
+2. **Analysis**: Explain *why* this result matters or what patterns you see.
+3. **Context**: Mention any limitations or assumptions based on the data provided.
+4. **Tone**: Professional, business-focused, and helpful.
+
+Interpretation:"""
+
+    RAG_ANSWER_PROMPT = """You are a knowledgeable assistant. Answer the user's question based strictly on the provided context.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Instructions:
+1. Use ONLY the information in the context.
+2. If the context doesn't contain the answer, say "I cannot answer this based on the available information."
+3. Be concise and professional.
+
+Answer:"""
+
+    INTENT_CLASSIFICATION_PROMPT = """You are an intent classifier. Determine if the user's question requires querying a structured Database (SQL) or a Knowledge Base (Text/Policies).
+
+User Question: {question}
+
+Instructions:
+1. Output `SQL_DATA` if the question is about numbers, statistics, table records, or aggregations (e.g., "how many orders", "total revenue", "list customers").
+2. Output `KNOWLEDGE_BASE` if the question is about policies, procedures, shipping, refunds, or general information (e.g., "what is the refund policy", "how to return").
+3. Output ONLY the classification label.
+
+Classification:"""
     
     def __init__(self, config: LLMConfig):
         """
@@ -131,6 +223,33 @@ class BaseLLMProvider(ABC):
             
         Returns:
             LLMResponse containing chat response
+        """
+        pass
+    
+    @abstractmethod
+    def classify_intent(self, question: str) -> LLMResponse:
+        """
+        Classify the user intent (SQL vs RAG).
+        
+        Args:
+            question: User question
+            
+        Returns:
+            LLMResponse containing classification
+        """
+        pass
+        
+    @abstractmethod
+    def answer_rag_question(self, question: str, context: str) -> LLMResponse:
+        """
+        Answer a question using retrieved context.
+        
+        Args:
+            question: User question
+            context: Retrieved context documents
+            
+        Returns:
+            LLMResponse containing answer
         """
         pass
     

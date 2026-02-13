@@ -1,35 +1,34 @@
 """
-OpenAI LLM provider implementation.
+Anthropic LLM provider implementation.
 
-This module provides integration with OpenAI's GPT models.
+This module provides integration with Anthropic's Claude models.
 """
 
 from typing import List, Dict, Any, Optional
-import openai
+import anthropic
 from loguru import logger
 
 from .base import BaseLLMProvider, LLMResponse, LLMConfig, LLMTaskType
 
 
-class OpenAIProvider(BaseLLMProvider):
-    """OpenAI GPT model provider."""
+class AnthropicProvider(BaseLLMProvider):
+    """Anthropic Claude model provider."""
     
     # Prompt templates are inherited from BaseLLMProvider
 
     def __init__(self, config: LLMConfig):
-        """Initialize OpenAI provider."""
+        """Initialize Anthropic provider."""
         super().__init__(config)
-        openai.api_key = config.api_key
-        self.client = openai.OpenAI(api_key=config.api_key)
+        self.client = anthropic.Anthropic(api_key=config.api_key)
     
-    def _call_openai(
+    def _call_anthropic(
         self,
         prompt: str,
         task_type: LLMTaskType,
         temperature: Optional[float] = None
     ) -> LLMResponse:
         """
-        Internal method to call OpenAI API.
+        Internal method to call Anthropic API.
         
         Args:
             prompt: Prompt to send
@@ -40,37 +39,28 @@ class OpenAIProvider(BaseLLMProvider):
             LLMResponse
         """
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.messages.create(
                 model=self.config.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful data analysis assistant."},
-                    {"role": "user", "content": prompt}
-                ],
+                max_tokens=self.config.max_tokens,
                 temperature=temperature or self.config.temperature,
-                max_tokens=self.config.max_tokens
+                system="You are a helpful data analysis assistant.",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
             )
             
-            content = response.choices[0].message.content.strip()
-            tokens_used = response.usage.total_tokens if response.usage else None
-            
-            # Estimate cost (approximate pricing for GPT-4)
-            cost = None
-            if tokens_used:
-                if 'gpt-4' in self.config.model:
-                    cost = (tokens_used / 1000) * 0.03  # $0.03 per 1K tokens
-                elif 'gpt-3.5' in self.config.model:
-                    cost = (tokens_used / 1000) * 0.002  # $0.002 per 1K tokens
+            content = response.content[0].text.strip()
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
             
             return LLMResponse(
                 content=content,
                 task_type=task_type,
                 model_used=self.config.model,
-                tokens_used=tokens_used,
-                cost=cost
+                tokens_used=tokens_used
             )
             
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
+            logger.error(f"Anthropic API error: {e}")
             return LLMResponse(
                 content=f"Error: {str(e)}",
                 task_type=task_type,
@@ -98,7 +88,7 @@ class OpenAIProvider(BaseLLMProvider):
             examples_section=examples_section
         )
         
-        response = self._call_openai(
+        response = self._call_anthropic(
             prompt,
             LLMTaskType.SQL_GENERATION,
             temperature=0.0  # Use zero temperature for SQL generation
@@ -130,7 +120,7 @@ class OpenAIProvider(BaseLLMProvider):
             schema_context=schema_context
         )
         
-        response = self._call_openai(
+        response = self._call_anthropic(
             prompt,
             LLMTaskType.QUERY_REFINEMENT,
             temperature=0.0
@@ -162,7 +152,7 @@ class OpenAIProvider(BaseLLMProvider):
             results_summary=results_summary
         )
         
-        return self._call_openai(
+        return self._call_anthropic(
             prompt,
             LLMTaskType.RESULT_INTERPRETATION,
             temperature=0.3  # Slightly higher temperature for interpretation
@@ -174,25 +164,23 @@ class OpenAIProvider(BaseLLMProvider):
         conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> LLMResponse:
         """Handle conversational interactions."""
-        messages = [
-            {"role": "system", "content": "You are a helpful data analysis assistant."}
-        ]
-        
+        messages = []
         if conversation_history:
             messages.extend(conversation_history)
         
         messages.append({"role": "user", "content": message})
         
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.messages.create(
                 model=self.config.model,
-                messages=messages,
+                max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens
+                system="You are a helpful data analysis assistant.",
+                messages=messages
             )
             
-            content = response.choices[0].message.content.strip()
-            tokens_used = response.usage.total_tokens if response.usage else None
+            content = response.content[0].text.strip()
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
             
             return LLMResponse(
                 content=content,
@@ -202,7 +190,7 @@ class OpenAIProvider(BaseLLMProvider):
             )
             
         except Exception as e:
-            logger.error(f"OpenAI chat error: {e}")
+            logger.error(f"Anthropic chat error: {e}")
             return LLMResponse(
                 content=f"Error: {str(e)}",
                 task_type=LLMTaskType.CONVERSATION,

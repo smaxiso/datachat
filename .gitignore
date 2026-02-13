@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment and Secrets
+.env
+.env.example # Keep this one usually, but user might want it ignored? 
+# Usually .env.example IS committed. .env IS NOT.
+
+# Databases and Vector Stores
+# We ignore the local database and vector store data
+data/analytics.db
+data/chroma/
+*.db
+*.sqlite
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+scripts/debug/
+scripts/debug_*.py
+scripts/test_import_only.py
+scripts/minimal_ingest.py
+scripts/hello.py
+output/
+logs/
+*.log

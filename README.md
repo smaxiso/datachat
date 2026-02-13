@@ -8,13 +8,13 @@ This platform acts as an intelligent interface layer between users and data infr
 
 ## ✨ Key Features
 
-- **Natural Language Querying**: Ask questions in plain English
-- **Intelligent SQL Generation**: LLM-powered query generation with context
-- **Safe Execution**: Validation and safety controls for query execution
-- **Result Interpretation**: Transform raw data into actionable insights
-- **Modular Architecture**: Pluggable connectors, LLMs, and vector stores
-- **Interactive UI**: Chat-based interface for easy interaction
-- **RESTful API**: Programmatic access to all features
+- **Natural Language Querying**: Ask questions in plain English.
+- **Intelligent SQL Generation**: Advanced prompt engineering for JOINs, aggregations, and complex logic.
+- **RAG Integration**: Query unstructured documentation and policies via ChromaDB.
+- **Autonomous Error Correction**: Self-healing query execution with LLM-powered feedback loops.
+- **Safe Execution**: Validation and safety controls for query execution.
+- **Result Interpretation**: Transform raw data into actionable insights using rich context.
+- **Modular Architecture**: Pluggable connectors, LLMs (Gemini, Anthropic, OpenAI), and vector stores.
 
 ## 🏗️ Architecture
 
@@ -263,30 +263,31 @@ DB_SCHEMA=public              # Schema to query
 
 ## 🛠️ Development Roadmap
 
-### ✅ Stage 1: Foundation (Current)
-- [x] PostgreSQL connector
-- [x] OpenAI LLM integration
+### ✅ Stage 1: Foundation
+- [x] PostgreSQL & SQLite connectors
+- [x] OpenAI, Gemini & Anthropic LLM integration
 - [x] Basic SQL generation
 - [x] Query execution with validation
 - [x] FastAPI endpoints
 - [x] Streamlit UI
 
-### 🚧 Stage 2: RAG Implementation (Next)
-- [ ] Schema metadata indexing
-- [ ] Vector store integration (FAISS)
-- [ ] Context retrieval for SQL generation
-- [ ] Improved accuracy with relevant schema only
+### ✅ Stage 2: SQL Optimization & Self-Correction
+- [x] Advanced prompt engineering (few-shot, JOIN logic)
+- [x] Schema enrichment with distinct categorical values
+- [x] Autonomous SQL error correction loop
+- [x] Exponential backoff for API rate limits
 
-### 📅 Stage 3: Modularity
-- [ ] Multiple LLM provider support
-- [ ] Multiple vector store options
-- [ ] Configuration-driven provider selection
+### ✅ Stage 3: RAG Implementation
+- [x] Document ingestion pipeline (Markdown)
+- [x] Vector store integration (ChromaDB)
+- [x] Intent routing (SQL vs. Knowledge Base)
+- [x] Retrieval-Augmented Generation for policy queries
 
 ### 📅 Stage 4: Multi-Source Support
-- [ ] MySQL connector
-- [ ] BigQuery connector
-- [ ] Cross-database queries
-- [ ] Unified metadata schema
+- [ ] MySQL connector (Ready for implementation)
+- [ ] BigQuery connector (Planned)
+- [ ] Cross-database query orchestration
+- [ ] Unified metadata schema management
 
 ### 📅 Stage 5: Production Features
 - [ ] Authentication & authorization

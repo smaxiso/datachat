@@ -176,6 +176,31 @@ class BaseConnector(ABC):
         """
         pass
     
+    def get_unique_values(self, table: str, column: str, limit: int = 50) -> List[Any]:
+        """
+        Get unique values for a column.
+        
+        Args:
+            table: Table name
+            column: Column name
+            limit: Maximum number of values to return
+            
+        Returns:
+            List of unique values
+        """
+        # Simple SQL generation - connectors can override if needed
+        sql = f"SELECT DISTINCT {column} FROM {table} LIMIT {limit}"
+        # Some DBs might need quoting, but we'll assume standard SQL for now
+        # or rely on the fact that existing code doesn't quote strictly yet
+        
+        result = self.execute_query(sql)
+        
+        if result.success and result.data is not None and not result.data.empty:
+            # Drop metadata/None values
+            values = result.data.iloc[:, 0].dropna().tolist()
+            return values
+        return []
+
     def get_table_names(self) -> List[str]:
         """
         Get list of all table names in the data source.

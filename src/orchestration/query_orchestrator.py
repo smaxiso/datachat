@@ -11,6 +11,13 @@ from loguru import logger
 
 from src.connectors.base import BaseConnector, QueryResult
 from src.llm.base import BaseLLMProvider
+try:
+    from src.rag.embeddings import EmbeddingService
+    from src.rag.vector_store import VectorStore
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    logger.warning("RAG dependencies not available")
 
 
 @dataclass
@@ -55,6 +62,17 @@ class QueryOrchestrator:
         self.connector = connector
         self.llm = llm_provider
         self.max_retries = max_retries
+        
+        # Initialize RAG components if available
+        self.embeddings = None
+        self.vector_store = None
+        if RAG_AVAILABLE:
+            try:
+                self.embeddings = EmbeddingService()
+                self.vector_store = VectorStore()
+                logger.info("RAG components initialized in Orchestrator")
+            except Exception as e:
+                logger.error(f"Failed to initialize RAG: {e}")
     
     def process_question(self, question: str) -> QueryResponse:
         """
@@ -69,7 +87,18 @@ class QueryOrchestrator:
         logger.info(f"Processing question: {question}")
         
         try:
-            # Step 1: Get schema context
+            # Step 1: Classify Intent (if RAG is active)
+            intent = "SQL_DATA"
+            if self.vector_store and self.vector_store.count() > 0:
+                intent_response = self.llm.classify_intent(question)
+                intent = intent_response.content
+                logger.info(f"Classified Intent: {intent}")
+            
+            if intent == "KNOWLEDGE_BASE":
+                return self._handle_rag_query(question)
+                
+            # Step 2: SQL Flow (Default)
+            # Get schema context
             schema_context = self._build_schema_context()
             
             # Step 2: Generate SQL
@@ -137,6 +166,7 @@ class QueryOrchestrator:
             "\nTables:\n"
         ]
         
+        # Build enhanced schema context with categorical values
         for table in schema.tables:
             context_parts.append(f"\nTable: {table.name}")
             if table.row_count:
@@ -147,10 +177,33 @@ class QueryOrchestrator:
                 pk_marker = " [PK]" if col.primary_key else ""
                 fk_marker = f" [FK -> {col.foreign_key}]" if col.foreign_key else ""
                 nullable = "NULL" if col.nullable else "NOT NULL"
-                context_parts.append(
+                
+                col_desc = (
                     f"    - {col.name}: {col.data_type} {nullable}{pk_marker}{fk_marker}"
                 )
-        
+                
+                # Heuristic for categorical columns: string types, not PK/FK
+                # In a real app, strict cardinality checks would be better
+                is_categorical = (
+                    "CHAR" in col.data_type.upper() or 
+                    "TEXT" in col.data_type.upper() or 
+                    "STRING" in col.data_type.upper()
+                ) and not col.primary_key and not col.foreign_key
+                
+                if is_categorical:
+                    try:
+                        # Fetch distinct values (limit to 10 to avoid bloating context)
+                        values = self.connector.get_unique_values(table.name, col.name, limit=10)
+                        if values and len(values) > 0:
+                            # Only show if not too many distinct values (pseudo-cardinality check)
+                            # In production, we'd check count distinct first
+                             col_desc += f" [Values: {', '.join(map(str, values))}]"
+                    except Exception as e:
+                        # Fail gracefully if fetching values fails
+                        logger.warning(f"Could not fetch unique values for {table.name}.{col.name}: {e}")
+                        
+                context_parts.append(col_desc)
+                
         # Add relationships
         if schema.relationships:
             context_parts.append("\nRelationships:")
@@ -274,3 +327,58 @@ class QueryOrchestrator:
             Schema summary
         """
         return self._build_schema_context()
+
+    def _handle_rag_query(self, question: str) -> QueryResponse:
+        """
+        Handle a RAG (Knowledge Base) query.
+        
+        Args:
+            question: User question
+            
+        Returns:
+            QueryResponse
+        """
+        logger.info("Handling RAG query...")
+        
+        try:
+            # 1. Generate embedding
+            query_embedding = self.embeddings.generate_embedding(question)
+            if not query_embedding:
+                return QueryResponse(success=False, question=question, error_message="Failed to generate embedding")
+                
+            # 2. Retrieve documents
+            results = self.vector_store.query_similar(query_embedding, n_results=3)
+            documents = results.get('documents', [[]])[0]
+            metadatas = results.get('metadatas', [[]])[0]
+            
+            if not documents:
+                return QueryResponse(
+                    success=True,
+                    question=question,
+                    interpretation="I looked through the knowledge base but couldn't find any relevant documents."
+                )
+                
+            # Format context
+            context_parts = []
+            for i, doc in enumerate(documents):
+                source = metadatas[i].get('filename', 'Unknown')
+                context_parts.append(f"Source: {source}\nContent:\n{doc}\n")
+                
+            context = "\n---\n".join(context_parts)
+            
+            # 3. Generate Answer
+            answer_response = self.llm.answer_rag_question(question, context)
+            
+            return QueryResponse(
+                success=True,
+                question=question,
+                interpretation=answer_response.content,
+                metadata={
+                    "source_docs": metadatas,
+                    "rag_mode": True
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"RAG Error: {e}")
+            return QueryResponse(success=False, question=question, error_message=str(e))

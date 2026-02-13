@@ -11,8 +11,8 @@ from typing import Optional, Dict, Any, List
 import os
 from loguru import logger
 
-from src.connectors.postgresql import PostgreSQLConnector
-from src.llm.openai_provider import OpenAIProvider
+from src.connectors.factory import ConnectorFactory
+from src.llm.factory import LLMFactory
 from src.llm.base import LLMConfig
 from src.orchestration.query_orchestrator import QueryOrchestrator
 
@@ -78,38 +78,31 @@ async def startup_event():
     logger.info("Initializing GenAI Data Platform...")
     
     try:
-        # Initialize database connector
-        db_config = {
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'port': int(os.getenv('DB_PORT', 5432)),
-            'database': os.getenv('DB_NAME', 'analytics'),
-            'username': os.getenv('DB_USER', 'postgres'),
-            'password': os.getenv('DB_PASSWORD', 'postgres'),
-            'schema': os.getenv('DB_SCHEMA', 'public')
-        }
-        
-        connector = PostgreSQLConnector(db_config)
+        # Initialize database connector using factory
+        connector = ConnectorFactory.create_connector()
         if not connector.connect():
-            logger.error("Failed to connect to database")
+            logger.error(f"Failed to connect to database using factory")
             return
         
-        # Initialize LLM provider
-        llm_config = LLMConfig(
-            provider='openai',
-            model=os.getenv('LLM_MODEL', 'gpt-3.5-turbo'),
-            temperature=float(os.getenv('LLM_TEMPERATURE', 0.1)),
-            max_tokens=int(os.getenv('LLM_MAX_TOKENS', 2000)),
-            api_key=os.getenv('OPENAI_API_KEY')
-        )
-        
-        llm = OpenAIProvider(llm_config)
+        # Initialize LLM provider using factory
+        # Factory handles loading config from env if not provided
+        try:
+            llm = LLMFactory.create_provider()
+            logger.info(f"LLM Provider initialized: {llm.config.provider}")
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM provider: {e}")
+            # We don't return here to allow API to start even if LLM fails (health check will show degraded)
+            llm = None
         
         # Initialize orchestrator
-        orchestrator = QueryOrchestrator(
-            connector=connector,
-            llm_provider=llm,
-            max_retries=int(os.getenv('MAX_RETRIES', 3))
-        )
+        if llm:
+            orchestrator = QueryOrchestrator(
+                connector=connector,
+                llm_provider=llm,
+                max_retries=int(os.getenv('MAX_RETRIES', 3))
+            )
+        else:
+            logger.warning("Orchestrator not initialized due to LLM failure")
         
         logger.info("Platform initialized successfully")
         
