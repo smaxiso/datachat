@@ -209,3 +209,37 @@ class OpenAIProvider(BaseLLMProvider):
                 model_used=self.config.model,
                 metadata={"error": True}
             )
+    def classify_intent(self, question: str) -> LLMResponse:
+        """Classify user intent."""
+        prompt = self.INTENT_CLASSIFICATION_PROMPT.format(question=question)
+        
+        response = self._call_openai(
+            prompt,
+            LLMTaskType.CONVERSATION,
+            temperature=0.0
+        )
+        
+        # Clean up response to ensure it's one of the expected keywords
+        content = response.content.strip().upper()
+        if "SQL_DATA" in content:
+            response.content = "SQL_DATA"
+        elif "KNOWLEDGE_BASE" in content:
+            response.content = "KNOWLEDGE_BASE"
+        else:
+            # Fallback to SQL_DATA if uncertain
+            response.content = "SQL_DATA"
+            
+        return response
+
+    def answer_rag_question(self, question: str, context: str) -> LLMResponse:
+        """Answer question using RAG context."""
+        prompt = self.RAG_ANSWER_PROMPT.format(
+            question=question,
+            context=context
+        )
+        
+        return self._call_openai(
+            prompt,
+            LLMTaskType.CONVERSATION,
+            temperature=0.3
+        )

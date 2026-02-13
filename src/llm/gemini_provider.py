@@ -46,8 +46,8 @@ class GeminiProvider(BaseLLMProvider):
             LLMResponse
         """
         import time
-        max_retries = 3
-        base_delay = 10  # Start with 10s delay for 429s
+        max_retries = self.config.max_retries
+        base_delay = self.config.base_retry_delay
 
         for attempt in range(max_retries + 1):
             try:

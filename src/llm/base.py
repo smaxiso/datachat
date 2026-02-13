@@ -37,6 +37,8 @@ class LLMConfig:
     temperature: float = 0.1
     max_tokens: int = 2000
     api_key: Optional[str] = None
+    max_retries: int = 3
+    base_retry_delay: int = 10
     additional_params: Optional[Dict[str, Any]] = None
 
 

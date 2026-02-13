@@ -7,10 +7,13 @@ This module coordinates all components to answer natural language questions.
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 import pandas as pd
+import hashlib
+import time
 from loguru import logger
 
 from src.connectors.base import BaseConnector, QueryResult
 from src.llm.base import BaseLLMProvider
+from src.orchestration.metrics import QueryMetrics
 try:
     from src.rag.embeddings import EmbeddingService
     from src.rag.vector_store import VectorStore
@@ -49,7 +52,7 @@ class QueryOrchestrator:
         self,
         connector: BaseConnector,
         llm_provider: BaseLLMProvider,
-        max_retries: int = 3
+        max_retries: Optional[int] = None
     ):
         """
         Initialize orchestrator.
@@ -57,11 +60,11 @@ class QueryOrchestrator:
         Args:
             connector: Data source connector
             llm_provider: LLM provider for SQL generation
-            max_retries: Maximum number of query refinement attempts
+            max_retries: Maximum number of query refinement attempts (defaults to LLM config)
         """
         self.connector = connector
         self.llm = llm_provider
-        self.max_retries = max_retries
+        self.max_retries = max_retries if max_retries is not None else llm_provider.config.max_retries
         
         # Initialize RAG components if available
         self.embeddings = None
@@ -73,6 +76,12 @@ class QueryOrchestrator:
                 logger.info("RAG components initialized in Orchestrator")
             except Exception as e:
                 logger.error(f"Failed to initialize RAG: {e}")
+        
+        # Initialize Cache
+        self._schema_cache = None
+        self._schema_cache_time = None
+        self._query_cache = {}  # MD5 hash -> QueryResponse
+        self.metrics = QueryMetrics()
     
     def process_question(self, question: str) -> QueryResponse:
         """
@@ -85,6 +94,15 @@ class QueryOrchestrator:
             QueryResponse with results and interpretation
         """
         logger.info(f"Processing question: {question}")
+        start_time = time.time()
+        
+        # Check cache
+        question_hash = hashlib.md5(question.lower().strip().encode()).hexdigest()
+        if question_hash in self._query_cache:
+            logger.info("Returning cached response")
+            # For cached queries, we don't record them in metrics again to avoid double counting,
+            # or we could record them as lightning fast queries. Let's skip for now as per plan.
+            return self._query_cache[question_hash]
         
         try:
             # Step 1: Classify Intent (if RAG is active)
@@ -95,7 +113,8 @@ class QueryOrchestrator:
                 logger.info(f"Classified Intent: {intent}")
             
             if intent == "KNOWLEDGE_BASE":
-                return self._handle_rag_query(question)
+                response = self._handle_rag_query(question)
+                return response
                 
             # Step 2: SQL Flow (Default)
             # Get schema context
@@ -113,12 +132,13 @@ class QueryOrchestrator:
             query_result = self._execute_with_retry(sql, schema_context)
             
             if not query_result.success:
-                return QueryResponse(
+                response = QueryResponse(
                     success=False,
                     question=question,
                     sql_generated=sql,
                     error_message=query_result.error_message
                 )
+                return response
             
             # Step 4: Interpret results
             interpretation = self._interpret_results(
@@ -126,7 +146,7 @@ class QueryOrchestrator:
             )
             
             # Step 5: Build response
-            return QueryResponse(
+            response = QueryResponse(
                 success=True,
                 question=question,
                 sql_generated=query_result.sql_executed,
@@ -140,6 +160,12 @@ class QueryOrchestrator:
                 }
             )
             
+            # Cache successful results
+            if response.success:
+                self._query_cache[question_hash] = response
+                
+            return response
+            
         except Exception as e:
             logger.error(f"Error processing question: {e}")
             return QueryResponse(
@@ -147,6 +173,15 @@ class QueryOrchestrator:
                 question=question,
                 error_message=f"Unexpected error: {str(e)}"
             )
+        finally:
+            if 'response' in locals() and response:
+                execution_time = time.time() - start_time
+                self.metrics.record_query(
+                    success=response.success,
+                    tokens=response.metadata.get('tokens_used') if response.metadata else None,
+                    cost=response.metadata.get('cost') if response.metadata else None,
+                    time_seconds=execution_time
+                )
     
     def _build_schema_context(self) -> str:
         """
@@ -158,6 +193,11 @@ class QueryOrchestrator:
         Returns:
             Formatted schema context string
         """
+        # Cache for 5 minutes
+        now = time.time()
+        if self._schema_cache and self._schema_cache_time and (now - self._schema_cache_time < 300):
+            return self._schema_cache
+            
         schema = self.connector.get_schema()
         
         context_parts = [
@@ -213,7 +253,10 @@ class QueryOrchestrator:
                     f"{rel['to_table']}.{rel['to_column']}"
                 )
         
-        return "\n".join(context_parts)
+        context = "\n".join(context_parts)
+        self._schema_cache = context
+        self._schema_cache_time = now
+        return context
     
     def _execute_with_retry(
         self,

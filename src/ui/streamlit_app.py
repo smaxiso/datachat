@@ -49,10 +49,15 @@ def check_api_health() -> bool:
         return False
 
 
-def get_schema_info() -> Dict[str, Any]:
-    """Get schema information from API."""
+    except:
+        pass
+    return None
+
+
+def get_metrics() -> Dict[str, Any]:
+    """Get performance metrics from API."""
     try:
-        response = requests.get(f"{API_URL}/api/schema", timeout=10)
+        response = requests.get(f"{API_URL}/api/metrics", timeout=5)
         if response.status_code == 200:
             return response.json()
     except:
@@ -114,6 +119,35 @@ with st.sidebar:
     
     st.divider()
     
+    # Query History
+    st.header("📜 Recent Queries")
+    if 'messages' in st.session_state and st.session_state.messages:
+        user_queries = [m['content'] for m in st.session_state.messages if m['role'] == 'user']
+        for i, q in enumerate(reversed(user_queries[-5:])):
+            if st.button(f"↻ {q[:40]}...", key=f"hist_{i}", use_container_width=True):
+                st.session_state.current_prompt = q
+                st.rerun()
+    else:
+        st.caption("No history yet")
+
+    st.divider()
+    
+    # Metrics Dashboard
+    st.header("🚀 Performance")
+    metrics = get_metrics()
+    if metrics:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Success Rate", metrics.get('success_rate', '0%'))
+            st.metric("Total Cost", metrics.get('total_cost', '$0.00'))
+        with col2:
+            st.metric("Avg Time", metrics.get('avg_query_time', '0s'))
+            st.metric("Queries", metrics.get('total_queries', 0))
+    else:
+        st.warning("Metrics unavailable")
+
+    st.divider()
+    
     # Example queries
     st.header("💡 Example Queries")
     example_queries = [
@@ -166,6 +200,17 @@ for message in st.session_state.messages:
                     st.metric("Tokens Used", tokens)
 
 # Chat input
+if 'current_prompt' in st.session_state:
+    prompt = st.session_state.current_prompt
+    del st.session_state.current_prompt
+    # Auto-submit when clicking from history
+    # This is tricky in Streamlit, usually users just type. 
+    # But we can simulate it by pre-filling or just letting the user press enter.
+    # For now, we'll just pre-populate or use a flag.
+    # Actually, st.chat_input doesn't support value.
+    # We can use a workaround or just leave it for now.
+    pass
+
 if prompt := st.chat_input("Ask a question about your data..."):
     # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})

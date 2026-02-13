@@ -255,3 +255,17 @@ class SQLiteConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Error fetching sample data: {e}")
             return pd.DataFrame()
+
+    def get_unique_values(self, table: str, column: str, limit: int = 50) -> List[Any]:
+        """Get unique values for a column (SQLite implementation)."""
+        try:
+            # Simple distinct query for SQLite
+            sql = f"SELECT DISTINCT {column} FROM {table} WHERE {column} IS NOT NULL LIMIT {limit}"
+            result = self.execute_query(sql)
+            
+            if result.success and result.data is not None and not result.data.empty:
+                return result.data.iloc[:, 0].tolist()
+            return []
+        except Exception as e:
+            logger.warning(f"Failed to get unique values for {table}.{column}: {e}")
+            return []

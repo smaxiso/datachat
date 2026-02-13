@@ -9,7 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 import os
+from dotenv import load_dotenv
 from loguru import logger
+
+# Load environment variables
+load_dotenv(override=True)
 
 from src.connectors.factory import ConnectorFactory
 from src.llm.factory import LLMFactory
@@ -258,10 +262,24 @@ async def list_sources():
     }
 
 
+@app.get("/api/metrics", tags=["Monitoring"])
+async def get_metrics():
+    """
+    Get system performance metrics.
+    """
+    if not orchestrator:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="System not initialized"
+        )
+    
+    return orchestrator.metrics.get_summary()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        "src.api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True
