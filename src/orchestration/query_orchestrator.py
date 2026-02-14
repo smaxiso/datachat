@@ -10,6 +10,7 @@ import pandas as pd
 import hashlib
 import time
 from loguru import logger
+from src.utils.cache import cache_response
 
 from src.connectors.base import BaseConnector, QueryResult
 from src.llm.base import BaseLLMProvider
@@ -34,6 +35,38 @@ class QueryResponse:
     interpretation: Optional[str] = None
     error_message: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        d = {
+            "success": self.success,
+            "question": self.question,
+            "sql_generated": self.sql_generated,
+            "interpretation": self.interpretation,
+            "error_message": self.error_message,
+            "metadata": self.metadata,
+            "data": None
+        }
+        if self.data is not None and not self.data.empty:
+            d["data"] = self.data.to_dict(orient='records')
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> 'QueryResponse':
+        """Create from dictionary."""
+        data = None
+        if d.get("data"):
+            data = pd.DataFrame(d["data"])
+        
+        return cls(
+            success=d["success"],
+            question=d["question"],
+            sql_generated=d.get("sql_generated"),
+            data=data,
+            interpretation=d.get("interpretation"),
+            error_message=d.get("error_message"),
+            metadata=d.get("metadata")
+        )
 
 
 class QueryOrchestrator:
@@ -84,6 +117,7 @@ class QueryOrchestrator:
         self._query_cache = {}  # MD5 hash -> QueryResponse
         self.metrics = QueryMetrics()
     
+    @cache_response(ttl=300, prefix="query", deserializer=QueryResponse.from_dict)
     def process_question(self, question: str) -> QueryResponse:
         """
         Process a natural language question end-to-end.
@@ -362,6 +396,7 @@ class QueryOrchestrator:
         
         return interpretation_response.content
     
+    @cache_response(ttl=3600, prefix="schema")
     def get_schema_summary(self) -> str:
         """
         Get a human-readable summary of the database schema.

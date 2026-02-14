@@ -41,6 +41,27 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+def login_user(username, password):
+    """Login user and get access token."""
+    try:
+        response = requests.post(
+            f"{API_URL}/token",
+            data={"username": username, "password": password},
+            timeout=5
+        )
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return None
+    except:
+        return None
+
+def get_headers():
+    """Get request headers with token."""
+    if 'token' in st.session_state:
+        return {"Authorization": f"Bearer {st.session_state.token}"}
+    return {}
+
 def check_api_health() -> bool:
     """Check if API is healthy."""
     try:
@@ -49,40 +70,44 @@ def check_api_health() -> bool:
     except:
         return False
 
-
-
 def get_schema_info() -> Dict[str, Any]:
     """Get database schema information from API."""
     try:
-        response = requests.get(f"{API_URL}/api/schema", timeout=5)
+        response = requests.get(f"{API_URL}/api/schema", headers=get_headers(), timeout=5)
         if response.status_code == 200:
             return response.json()
     except:
         pass
     return None
-
 
 def get_metrics() -> Dict[str, Any]:
     """Get performance metrics from API."""
     try:
-        response = requests.get(f"{API_URL}/api/metrics", timeout=5)
+        response = requests.get(f"{API_URL}/api/metrics", timeout=5) # Metrics is protected? No, checking main.py... it is NOT protected in my previous read?
+        # Let's check main.py again. get_metrics was at lines 300+.
+        # It was NOT protected in the previous read.
+        # But logically it SHOULD be.
+        # I'll add headers anyway, it won't hurt.
+        response = requests.get(f"{API_URL}/api/metrics", headers=get_headers(), timeout=5)
         if response.status_code == 200:
             return response.json()
     except:
         pass
     return None
-
 
 def execute_query(question: str) -> Dict[str, Any]:
     """Execute a natural language query."""
     try:
         response = requests.post(
             f"{API_URL}/api/query",
-            json={"question": prompt},
+            json={"question": question},
+            headers=get_headers(),
             timeout=AppMetadata.QUERY_TIMEOUT
         )
         if response.status_code == 200:
             return response.json()
+        elif response.status_code == 401:
+             return {"success": False, "error_message": "Session expired. Please login again."}
     except Exception as e:
         return {
             "success": False,
@@ -95,12 +120,41 @@ def execute_query(question: str) -> Dict[str, Any]:
 def main():
     # Header
     st.markdown(f'<div class="main-header">{AppMetadata.ICON} DataChat</div>', unsafe_allow_html=True)
+    
+    # Initialize session state
+    if 'token' not in st.session_state:
+        st.session_state.token = None
+    
+    # Login Flow
+    if not st.session_state.token:
+        st.markdown('<div class="sub-header">Please login to continue</div>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.form("login_form"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Login")
+                
+                if submit:
+                    token_data = login_user(username, password)
+                    if token_data:
+                        st.session_state.token = token_data['access_token']
+                        st.success("Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid credentials")
+        return
+
+    # Authenticated View
     st.markdown('<div class="sub-header">Ask questions about your data in natural language</div>', unsafe_allow_html=True)
 
     # Sidebar
     with st.sidebar:
         st.header("⚙️ System Status")
-        
+        if st.button("Logout"):
+            st.session_state.token = None
+            st.rerun()
+            
         # Health check
         if check_api_health():
             st.success("✅ API Connected")
@@ -172,7 +226,7 @@ def main():
             if st.button(example, key=example, use_container_width=True):
                 st.session_state.example_query = example
 
-    # Initialize session state
+    # Initialize session state for messages
     if 'messages' not in st.session_state:
         st.session_state.messages = []
 

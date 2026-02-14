@@ -22,6 +22,7 @@ class TestStreamlitApp:
                     raise AttributeError(key)
         
         mock_st.session_state = SessionStateMock()
+        mock_st.session_state.token = "fake-token"
         mock_st.chat_input.return_value = "question"
         
         # Mock requests response
@@ -58,3 +59,29 @@ class TestStreamlitApp:
         
         # Verification
         mock_st.chat_input.assert_called()
+
+    @patch('src.ui.streamlit_app.st')
+    @patch('src.ui.streamlit_app.requests')
+    def test_login_flow(self, mock_requests, mock_st):
+        # Setup mocks
+        class SessionStateMock(dict):
+            def __getattr__(self, key):
+                return self.get(key)
+            def __setattr__(self, key, value):
+                self[key] = value
+            def __delattr__(self, key):
+                try:
+                    del self[key]
+                except KeyError:
+                    raise AttributeError(key)
+        
+        mock_st.session_state = SessionStateMock()
+        mock_st.session_state.token = None
+        mock_st.columns.return_value = [MagicMock(), MagicMock(), MagicMock()]
+        
+        main()
+        
+        # Verify login form elements called
+        mock_st.text_input.assert_any_call("Username")
+        mock_st.text_input.assert_any_call("Password", type="password")
+        mock_st.chat_input.assert_not_called()

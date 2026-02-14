@@ -4,6 +4,7 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 python-multipart==0.0.6
+starlette==0.27.0
 
 # Database Connectivity
 sqlalchemy>=1.4,<2.0
@@ -43,6 +44,10 @@ pyyaml==6.0.1
 httpx==0.25.2
 tenacity==8.2.3
 loguru==0.7.2
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+redis==5.0.1
+prometheus-fastapi-instrumentator==6.1.0
 
 # Development Tools
 pytest==7.4.3
