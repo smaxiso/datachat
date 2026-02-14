@@ -18,12 +18,11 @@ class TestSQLiteConnector:
         conn = SQLiteConnector(config)
         conn.connect()
         # Seed data
-        with conn.engine.connect() as connection:
+        with conn.engine.begin() as connection:
             connection.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, role TEXT)"))
             connection.execute(text("INSERT INTO users (name, role) VALUES ('Alice', 'Admin')"))
             connection.execute(text("INSERT INTO users (name, role) VALUES ('Bob', 'User')"))
             connection.execute(text("INSERT INTO users (name, role) VALUES ('Charlie', 'User')"))
-            connection.commit()
         return conn
 
     def test_connection(self, connector):
