@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
+from src.utils.constants import LLMDefaults
 
 
 class LLMTaskType(Enum):
@@ -34,11 +35,11 @@ class LLMConfig:
     """Configuration for LLM provider."""
     provider: str
     model: str
-    temperature: float = 0.1
-    max_tokens: int = 2000
+    temperature: float = LLMDefaults.TEMPERATURE
+    max_tokens: int = LLMDefaults.MAX_TOKENS
     api_key: Optional[str] = None
-    max_retries: int = 3
-    base_retry_delay: int = 10
+    max_retries: int = LLMDefaults.MAX_RETRIES
+    base_retry_delay: int = LLMDefaults.RETRY_DELAY
     additional_params: Optional[Dict[str, Any]] = None
 
 

@@ -14,6 +14,7 @@ from loguru import logger
 from src.connectors.base import BaseConnector, QueryResult
 from src.llm.base import BaseLLMProvider
 from src.orchestration.metrics import QueryMetrics
+from src.utils.constants import OrchestrationConstants
 try:
     from src.rag.embeddings import EmbeddingService
     from src.rag.vector_store import VectorStore
@@ -193,9 +194,8 @@ class QueryOrchestrator:
         Returns:
             Formatted schema context string
         """
-        # Cache for 5 minutes
         now = time.time()
-        if self._schema_cache and self._schema_cache_time and (now - self._schema_cache_time < 300):
+        if self._schema_cache and self._schema_cache_time and (now - self._schema_cache_time < OrchestrationConstants.SCHEMA_CACHE_TTL):
             return self._schema_cache
             
         schema = self.connector.get_schema()
@@ -232,8 +232,8 @@ class QueryOrchestrator:
                 
                 if is_categorical:
                     try:
-                        # Fetch distinct values (limit to 10 to avoid bloating context)
-                        values = self.connector.get_unique_values(table.name, col.name, limit=10)
+                        # Fetch distinct values (limit to n to avoid bloating context)
+                        values = self.connector.get_unique_values(table.name, col.name, limit=OrchestrationConstants.CAT_VALUES_LIMIT)
                         if values and len(values) > 0:
                             # Only show if not too many distinct values (pseudo-cardinality check)
                             # In production, we'd check count distinct first
@@ -337,7 +337,7 @@ class QueryOrchestrator:
             summary_parts = [
                 f"Returned {len(data)} rows",
                 f"\nColumns: {', '.join(data.columns)}",
-                f"\n\nFirst few rows:\n{data.head(10).to_string()}"
+                f"\n\nFirst few rows:\n{data.head(OrchestrationConstants.RESULT_SUMMARY_ROWS).to_string()}"
             ]
             
             # Add basic statistics for numeric columns

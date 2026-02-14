@@ -11,10 +11,12 @@ except ImportError:
     logger.warning("sentence-transformers not installed. RAG features will not work.")
     SentenceTransformer = None
 
+from src.utils.constants import RAGConstants
+
 class EmbeddingService:
     """Service to generate embeddings for text."""
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = RAGConstants.EMBEDDING_MODEL):
         """
         Initialize embedding model.
         

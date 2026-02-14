@@ -12,6 +12,7 @@ from .base import BaseLLMProvider, LLMConfig
 from .openai_provider import OpenAIProvider
 from .gemini_provider import GeminiProvider
 from .anthropic_provider import AnthropicProvider
+from src.utils.constants import LLMProvider, ModelName
 
 
 class LLMFactory:
@@ -33,11 +34,11 @@ class LLMFactory:
             
         logger.info(f"Initializing LLM provider: {config.provider} (model: {config.model})")
         
-        if config.provider.lower() == 'openai':
+        if config.provider.lower() == LLMProvider.OPENAI:
             return OpenAIProvider(config)
-        elif config.provider.lower() == 'gemini':
+        elif config.provider.lower() == LLMProvider.GEMINI:
             return GeminiProvider(config)
-        elif config.provider.lower() == 'anthropic':
+        elif config.provider.lower() == LLMProvider.ANTHROPIC:
             return AnthropicProvider(config)
         else:
             raise ValueError(f"Unsupported LLM provider: {config.provider}")
@@ -45,20 +46,20 @@ class LLMFactory:
     @staticmethod
     def _load_config_from_env() -> LLMConfig:
         """Load configuration from environment variables."""
-        provider = os.getenv('LLM_PROVIDER', 'openai').lower()
+        provider = os.getenv('LLM_PROVIDER', LLMProvider.OPENAI).lower()
         
         # Default models per provider
         default_models = {
-            'openai': 'gpt-3.5-turbo',
-            'gemini': 'gemini-pro',
-            'anthropic': 'claude-3-sonnet-20240229'
+            LLMProvider.OPENAI: ModelName.GPT_3_5_TURBO,
+            LLMProvider.GEMINI: ModelName.GEMINI_PRO,
+            LLMProvider.ANTHROPIC: ModelName.CLAUDE_3_SONNET
         }
         
         # Default API keys
         api_keys = {
-            'openai': os.getenv('OPENAI_API_KEY'),
-            'gemini': os.getenv('GOOGLE_API_KEY'),
-            'anthropic': os.getenv('ANTHROPIC_API_KEY')
+            LLMProvider.OPENAI: os.getenv('OPENAI_API_KEY'),
+            LLMProvider.GEMINI: os.getenv('GOOGLE_API_KEY'),
+            LLMProvider.ANTHROPIC: os.getenv('ANTHROPIC_API_KEY')
         }
         
         model = os.getenv('LLM_MODEL', default_models.get(provider, ''))

@@ -1,0 +1,89 @@
+flowchart TD
+    %% Styling Definitions
+    classDef actor fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef container fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
+    classDef component fill:#ffffff,stroke:#0277bd,stroke-dasharray: 5 5;
+    classDef database fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef external fill:#fff3e0,stroke:#ef6c00,stroke-width:2px;
+
+    %% Actors
+    User((User)):::actor
+
+    %% System Boundary: Docker Environment
+    subgraph Docker_Compose [Docker Environment]
+        style Docker_Compose fill:#fafafa,stroke:#666,stroke-width:2px,stroke-dasharray: 5 5
+
+        %% UI Container
+        subgraph UI_Container [Streamlit Container]
+            direction TB
+            StreamlitApp[Streamlit UI<br/>src/ui/streamlit_app.py]:::container
+        end
+
+        %% API Container
+        subgraph API_Container [API Container]
+            direction TB
+            FastAPI[FastAPI Server<br/>src/api/main.py]:::container
+            
+            %% Core Logic Components
+            subgraph Core_Logic [Orchestration Layer]
+                Orchestrator[Query Orchestrator<br/>src/orchestration]:::component
+                ConfigLoader[Config Loader<br/>sources.yaml]:::component
+            end
+
+            %% Factory Patterns
+            subgraph Factories [Integration Layer]
+                LLMFactory[LLM Factory]:::component
+                ConnFactory[Connector Factory]:::component
+            end
+
+            %% RAG Components
+            subgraph RAG_System [RAG Engine]
+                Embeddings[Embedding Service<br/>SentenceTransformers]:::component
+                VectorDB[(ChromaDB<br/>Vector Store)]:::database
+            end
+        end
+    end
+
+    %% External Systems
+    subgraph External_Cloud [External Services]
+        direction LR
+        OpenAI[OpenAI API]:::external
+        Gemini[Google Gemini API]:::external
+        Anthropic[Anthropic Claude API]:::external
+    end
+
+    subgraph Data_Sources [Data Layer]
+        direction LR
+        PG[(PostgreSQL)]:::database
+        MySQL[(MySQL)]:::database
+        BQ[(BigQuery)]:::database
+        RS[(Redshift)]:::database
+        DDB[(DynamoDB)]:::database
+        SQLite[(SQLite)]:::database
+    end
+
+    %% Relationships / Data Flow
+    User -->|1. Asks Question| StreamlitApp
+    StreamlitApp -->|2. POST /api/query| FastAPI
+    
+    FastAPI -->|3. Delegate| Orchestrator
+    Orchestrator -->|4. Load Config| ConfigLoader
+    
+    %% RAG Flow
+    Orchestrator -.->|5a. Retrieve Context| RAG_System
+    RAG_System --> Embeddings
+    Embeddings --> VectorDB
+
+    %% LLM Generation Flow
+    Orchestrator -->|5b. Generate SQL| LLMFactory
+    LLMFactory --> OpenAI & Gemini & Anthropic
+
+    %% Data Execution Flow
+    Orchestrator -->|6. Execute SQL| ConnFactory
+    ConnFactory -->|Select Source| PG & MySQL & BQ & RS & DDB & SQLite
+
+    %% Return Path
+    ConnFactory -->|7. Raw Data| Orchestrator
+    Orchestrator -->|8. Interpret Results| LLMFactory
+    Orchestrator -->|9. JSON Response| FastAPI
+    FastAPI -->|10. Render Results| StreamlitApp

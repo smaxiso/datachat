@@ -9,6 +9,7 @@ from loguru import logger
 
 from src.rag.embeddings import EmbeddingService
 from src.rag.vector_store import VectorStore
+from src.utils.constants import RAGConstants
 
 class DocumentIngester:
     """Ingest documents into the vector store."""
@@ -59,7 +60,7 @@ class DocumentIngester:
         logger.info(f"Loaded {len(docs)} documents")
         return docs
         
-    def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+    def chunk_text(self, text: str, chunk_size: int = RAGConstants.DEFAULT_CHUNK_SIZE, overlap: int = RAGConstants.DEFAULT_CHUNK_OVERLAP) -> List[str]:
         """
         Split text into chunks.
         

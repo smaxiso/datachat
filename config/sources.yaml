@@ -1,0 +1,65 @@
+sources:
+  # ---------------------------------------------------------
+  # LOCAL DEVELOPMENT
+  # ---------------------------------------------------------
+  local_sqlite:
+    type: sqlite
+    description: "Local SQLite database for testing and development"
+    config:
+      database: "data/analytics.db"
+
+  # ---------------------------------------------------------
+  # PRODUCTION DATABASES (SQL)
+  # ---------------------------------------------------------
+  prod_postgres:
+    type: postgres
+    description: "Production PostgreSQL database"
+    config:
+      host: "${DB_HOST}"
+      port: 5432
+      database: "${DB_NAME}"
+      username: "${DB_USER}"
+      password: "${DB_PASSWORD}"
+      schema: "${DB_SCHEMA}"
+
+  marketing_mysql:
+    type: mysql
+    description: "Marketing Analytics MySQL database"
+    config:
+      host: "${MYSQL_HOST}"
+      port: 3306
+      database: "marketing"
+      username: "${MYSQL_USER}"
+      password: "${MYSQL_PASSWORD}"
+
+  # ---------------------------------------------------------
+  # DATA WAREHOUSES
+  # ---------------------------------------------------------
+  analytics_bq:
+    type: bigquery
+    description: "Enterprise Data Warehouse (BigQuery)"
+    config:
+      connection_string: "bigquery://${DB_PROJECT_ID}/${DB_DATASET}"
+      credentials_path: "${GOOGLE_APPLICATION_CREDENTIALS}"
+
+  marketing_redshift:
+    type: redshift
+    description: "Marketing Data Warehouse (Redshift)"
+    config:
+      host: "${REDSHIFT_HOST}"
+      port: 5439
+      database: "marketing"
+      username: "${REDSHIFT_USER}"
+      password: "${REDSHIFT_PASSWORD}"
+      schema: "public"
+
+  # ---------------------------------------------------------
+  # NOSQL DATABASES
+  # ---------------------------------------------------------
+  users_dynamo:
+    type: dynamodb
+    description: "User Profiles (DynamoDB)"
+    config:
+      region_name: "us-east-1"
+      aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
+      aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"

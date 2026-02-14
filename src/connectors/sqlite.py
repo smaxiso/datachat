@@ -22,16 +22,11 @@ from src.connectors.base import (
     ValidationResult,
     ConnectionStatus
 )
+from src.utils.constants import SQLiteConstants
 
 
 class SQLiteConnector(BaseConnector):
     """SQLite database connector."""
-    
-    # SQL keywords that are not allowed for safety
-    BLOCKED_KEYWORDS = [
-        'DROP', 'DELETE', 'TRUNCATE', 'ALTER', 'CREATE',
-        'INSERT', 'UPDATE', 'GRANT', 'REVOKE', 'ATTACH', 'DETACH'
-    ]
     
     def __init__(self, config: Dict[str, Any]):
         """
@@ -212,7 +207,7 @@ class SQLiteConnector(BaseConnector):
         warnings = []
         
         # Check for blocked keywords
-        for keyword in self.BLOCKED_KEYWORDS:
+        for keyword in SQLiteConstants.BLOCKED_KEYWORDS:
             # Use regex to match whole words only
             if re.search(rf'\b{keyword}\b', sql_upper):
                 return ValidationResult(

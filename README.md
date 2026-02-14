@@ -284,7 +284,7 @@ DB_SCHEMA=public              # Schema to query
 - [x] Retrieval-Augmented Generation for policy queries
 
 ### 📅 Stage 4: Multi-Source Support
-- [ ] MySQL connector (Ready for implementation)
+- [x] MySQL connector (Ready for implementation)
 - [ ] BigQuery connector (Planned)
 - [ ] Cross-database query orchestration
 - [ ] Unified metadata schema management

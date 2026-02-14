@@ -13,10 +13,12 @@ except ImportError:
     logger.warning("chromadb not installed. RAG features will not work.")
     chromadb = None
 
+from src.utils.constants import RAGConstants
+
 class VectorStore:
     """Wrapper around ChromaDB for vector storage."""
     
-    def __init__(self, persist_dir: str = "data/chroma", collection_name: str = "datachat_docs"):
+    def __init__(self, persist_dir: str = RAGConstants.VECTOR_DB_DIR, collection_name: str = RAGConstants.COLLECTION_NAME):
         """
         Initialize Vector Store.
         
@@ -85,7 +87,7 @@ class VectorStore:
             logger.error(f"Error adding documents: {e}")
             return False
             
-    def query_similar(self, query_embedding: List[float], n_results: int = 3) -> Dict[str, Any]:
+    def query_similar(self, query_embedding: List[float], n_results: int = RAGConstants.CONTEXT_DOCS_COUNT) -> Dict[str, Any]:
         """
         Find similar documents.
         

@@ -1,0 +1,42 @@
+# Environment and Secrets
+.env
+.env.example
+
+# Development artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.gitignore
+.dockerignore
+.idea/
+.vscode/
+
+# Project Data (Persisted via volumes)
+data/
+# But keep schemas or essential seeds if needed? No, we rely on setup scripts or volumes.
+# If we need to pre-seed, we might copy specific files, but generally exclude 'data/'.
+
+# Testing
+.pytest_cache/
+htmlcov/
+tests/
+
+# Scripts
+scripts/debug/
+scripts/debug_*.py

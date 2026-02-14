@@ -1,14 +1,14 @@
 """
-PostgreSQL data source connector implementation.
+MySQL data source connector implementation.
 
-This module provides a concrete implementation of the BaseConnector for PostgreSQL databases.
+This module provides a concrete implementation of the BaseConnector for MySQL databases.
 """
 
 import re
 import time
 from typing import List, Dict, Any, Optional
 import pandas as pd
-from sqlalchemy import create_engine, text, inspect, MetaData
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
 
@@ -21,15 +21,15 @@ from src.connectors.base import (
     ValidationResult,
     ConnectionStatus
 )
-from src.utils.constants import PostgresConstants
+from src.utils.constants import MySQLConstants
 
 
-class PostgreSQLConnector(BaseConnector):
-    """PostgreSQL database connector."""
+class MySQLConnector(BaseConnector):
+    """MySQL database connector."""
     
     def __init__(self, config: Dict[str, Any]):
         """
-        Initialize PostgreSQL connector.
+        Initialize MySQL connector.
         
         Args:
             config: Configuration dictionary with keys:
@@ -38,22 +38,21 @@ class PostgreSQLConnector(BaseConnector):
                 - database: Database name
                 - username: Database username
                 - password: Database password
-                - schema: Schema name (default: 'public')
         """
         super().__init__(config)
         self.host = config.get('host', 'localhost')
-        self.port = config.get('port', 5432)
+        self.port = config.get('port', 3306)
         self.database = config['database']
         self.username = config['username']
         self.password = config['password']
-        self.schema = config.get('schema', 'public')
         self.engine = None
         
     def connect(self) -> bool:
-        """Establish connection to PostgreSQL database."""
+        """Establish connection to MySQL database."""
         try:
+            # MySQL connection string using pymysql
             connection_string = (
-                f"postgresql://{self.username}:{self.password}"
+                f"mysql+pymysql://{self.username}:{self.password}"
                 f"@{self.host}:{self.port}/{self.database}"
             )
             self.engine = create_engine(
@@ -67,12 +66,12 @@ class PostgreSQLConnector(BaseConnector):
                 conn.execute(text("SELECT 1"))
             
             self._status = ConnectionStatus.CONNECTED
-            logger.info(f"Connected to PostgreSQL: {self.database}")
+            logger.info(f"Connected to MySQL: {self.database}")
             return True
             
         except SQLAlchemyError as e:
             self._status = ConnectionStatus.ERROR
-            logger.error(f"Failed to connect to PostgreSQL: {e}")
+            logger.error(f"Failed to connect to MySQL: {e}")
             return False
     
     def disconnect(self) -> bool:
@@ -81,7 +80,7 @@ class PostgreSQLConnector(BaseConnector):
             if self.engine:
                 self.engine.dispose()
                 self._status = ConnectionStatus.DISCONNECTED
-                logger.info(f"Disconnected from PostgreSQL: {self.database}")
+                logger.info(f"Disconnected from MySQL: {self.database}")
             return True
         except Exception as e:
             logger.error(f"Error disconnecting: {e}")
@@ -98,14 +97,18 @@ class PostgreSQLConnector(BaseConnector):
     
     def get_schema(self) -> SchemaMetadata:
         """Retrieve complete schema metadata."""
+        if not self.engine:
+             raise RuntimeError("Database not connected")
+
         inspector = inspect(self.engine)
         tables = []
         
-        for table_name in inspector.get_table_names(schema=self.schema):
+        # In MySQL, schema is essentially the database name
+        for table_name in inspector.get_table_names():
             columns = []
             
             # Get column information
-            for col in inspector.get_columns(table_name, schema=self.schema):
+            for col in inspector.get_columns(table_name):
                 column_meta = ColumnMetadata(
                     name=col['name'],
                     data_type=str(col['type']),
@@ -115,7 +118,7 @@ class PostgreSQLConnector(BaseConnector):
                 columns.append(column_meta)
             
             # Mark primary keys
-            pk_constraint = inspector.get_pk_constraint(table_name, schema=self.schema)
+            pk_constraint = inspector.get_pk_constraint(table_name)
             if pk_constraint:
                 pk_columns = pk_constraint.get('constrained_columns', [])
                 for col in columns:
@@ -123,7 +126,7 @@ class PostgreSQLConnector(BaseConnector):
                         col.primary_key = True
             
             # Get foreign keys
-            fks = inspector.get_foreign_keys(table_name, schema=self.schema)
+            fks = inspector.get_foreign_keys(table_name)
             for fk in fks:
                 for col_name in fk['constrained_columns']:
                     for col in columns:
@@ -137,7 +140,7 @@ class PostgreSQLConnector(BaseConnector):
             
             table_meta = TableMetadata(
                 name=table_name,
-                schema=self.schema,
+                schema=self.database,
                 columns=columns,
                 row_count=row_count
             )
@@ -148,7 +151,7 @@ class PostgreSQLConnector(BaseConnector):
         
         return SchemaMetadata(
             source_name=self.database,
-            source_type="postgresql",
+            source_type="mysql",
             tables=tables,
             relationships=relationships
         )
@@ -156,24 +159,35 @@ class PostgreSQLConnector(BaseConnector):
     def _get_table_row_count(self, table_name: str) -> int:
         """Get approximate row count for a table."""
         try:
+            # Use information_schema for MySQL estimate
             query = text(f"""
-                SELECT reltuples::bigint AS estimate
-                FROM pg_class
-                WHERE relname = :table_name
+                SELECT table_rows
+                FROM information_schema.tables
+                WHERE table_schema = :database
+                  AND table_name = :table_name
             """)
             with self.engine.connect() as conn:
-                result = conn.execute(query, {"table_name": table_name})
+                result = conn.execute(query, {
+                    "database": self.database,
+                    "table_name": table_name
+                })
                 count = result.scalar()
-                return int(count) if count else 0
+                return int(count) if count is not None else 0
         except Exception:
-            return 0
+            # Fallback to COUNT(*) if estimate fails (slower but reliable)
+             try:
+                with self.engine.connect() as conn:
+                    result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    return int(result.scalar())
+             except Exception:
+                return 0
     
     def _extract_relationships(self, inspector) -> List[Dict[str, Any]]:
         """Extract foreign key relationships."""
         relationships = []
         
-        for table_name in inspector.get_table_names(schema=self.schema):
-            fks = inspector.get_foreign_keys(table_name, schema=self.schema)
+        for table_name in inspector.get_table_names():
+            fks = inspector.get_foreign_keys(table_name)
             for fk in fks:
                 relationships.append({
                     'from_table': table_name,
@@ -190,7 +204,7 @@ class PostgreSQLConnector(BaseConnector):
         warnings = []
         
         # Check for blocked keywords
-        for keyword in PostgresConstants.BLOCKED_KEYWORDS:
+        for keyword in MySQLConstants.BLOCKED_KEYWORDS:
             if re.search(rf'\b{keyword}\b', sql_upper):
                 return ValidationResult(
                     is_valid=False,
@@ -199,27 +213,12 @@ class PostgreSQLConnector(BaseConnector):
                 )
         
         # Ensure it's a SELECT query
-        if not sql_upper.strip().startswith('SELECT'):
-            return ValidationResult(
+        if not sql_upper.strip().startswith('SELECT') and not sql_upper.strip().startswith('WITH'):
+             return ValidationResult(
                 is_valid=False,
                 error_message="Only SELECT queries are allowed",
                 warnings=warnings
             )
-        
-        # Check for potential SQL injection patterns
-        suspicious_patterns = [
-            r";\s*DROP",
-            r";\s*DELETE",
-            r"--\s*",
-            r"\/\*.*\*\/",
-            r"UNION\s+SELECT",
-            r"EXEC\s*\(",
-            r"EXECUTE\s*\("
-        ]
-        
-        for pattern in suspicious_patterns:
-            if re.search(pattern, sql_upper):
-                warnings.append(f"Suspicious pattern detected: {pattern}")
         
         # Try to validate syntax by using EXPLAIN
         try:
@@ -257,8 +256,9 @@ class PostgreSQLConnector(BaseConnector):
         
         try:
             # Add LIMIT if not present to prevent huge result sets
+            # MySQL LIMIT syntax is just "LIMIT N" at the end
             if 'LIMIT' not in sql.upper():
-                sql = f"{sql.rstrip(';')} LIMIT 10000"
+                sql = f"{sql.strip().rstrip(';')} LIMIT 10000"
             
             with self.engine.connect() as conn:
                 result = conn.execute(text(sql), params or {})
@@ -286,7 +286,7 @@ class PostgreSQLConnector(BaseConnector):
     
     def get_sample_data(self, table: str, limit: int = 5) -> pd.DataFrame:
         """Retrieve sample data from a table."""
-        sql = f"SELECT * FROM {self.schema}.{table} LIMIT {limit}"
+        sql = f"SELECT * FROM {table} LIMIT {limit}"
         result = self.execute_query(sql)
         
         if result.success:
@@ -294,3 +294,16 @@ class PostgreSQLConnector(BaseConnector):
         else:
             logger.error(f"Failed to get sample data: {result.error_message}")
             return pd.DataFrame()
+
+    def get_unique_values(self, table: str, column: str, limit: int = 50) -> List[Any]:
+        """Get unique values for a column (MySQL implementation)."""
+        try:
+            sql = f"SELECT DISTINCT {column} FROM {table} WHERE {column} IS NOT NULL LIMIT {limit}"
+            result = self.execute_query(sql)
+            
+            if result.success and result.data is not None and not result.data.empty:
+                return result.data.iloc[:, 0].tolist()
+            return []
+        except Exception as e:
+            logger.warning(f"Failed to get unique values for {table}.{column}: {e}")
+            return []
