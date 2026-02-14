@@ -10,9 +10,11 @@ This platform acts as an intelligent interface layer between users and data infr
 
 - **Natural Language Querying**: Ask questions in plain English.
 - **Intelligent SQL Generation**: Advanced prompt engineering for JOINs, aggregations, and complex logic.
+- **Multi-Source Config**: Manage multiple database connections via `config/sources.yaml`.
 - **RAG Integration**: Query unstructured documentation and policies via ChromaDB.
 - **Autonomous Error Correction**: Self-healing query execution with LLM-powered feedback loops.
-- **Safe Execution**: Validation and safety controls for query execution.
+- **Safe Execution**: Strict validation classes for every SQL dialect (Postgres, MySQL, Redshift, BigQuery, etc.).
+- **NoSQL Support**: Query DynamoDB using PartiQL with automatic complexity validation.
 - **Result Interpretation**: Transform raw data into actionable insights using rich context.
 - **Modular Architecture**: Pluggable connectors, LLMs (Gemini, Anthropic, OpenAI), and vector stores.
 
@@ -42,11 +44,15 @@ This platform acts as an intelligent interface layer between users and data infr
     │   LLM      │          │   Connector    │
     │  Provider  │          │     Layer      │
     │            │          │                │
-    │  OpenAI    │          │  PostgreSQL    │
-    │ Anthropic  │          │    MySQL       │
-    │  Ollama    │          │  BigQuery      │
+    │  OpenAI    │          │  Postgres/MySQL│
+    │ Anthropic  │          │   BigQuery     │
+    │  Gemini    │          │   Redshift     │
+    │  Ollama    │          │   DynamoDB     │
     └────────────┘          └────────────────┘
 ```
+
+> [!TIP]
+> View the detailed visual flow in [FLOW_DIAGRAM.mermaid](file:///home/sumit/workspace/datachat/docs/FLOW_DIAGRAM.mermaid).
 
 ## 📋 Prerequisites
 
@@ -72,15 +78,24 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+### 2. Configure Sources
 
-```bash
-# Copy environment template
-cp .env.example .env
+DataChat uses a centralized configuration for multiple data sources. Edit `config/sources.yaml` to define your connections.
 
-# Edit .env with your credentials
-nano .env  # or use your preferred editor
+```yaml
+# config/sources.yaml
+sources:
+  analytics_db:
+    type: postgres
+    config:
+      host: "${DB_HOST}"
+      database: "analytics"
+      # ...
 ```
+
+### 3. Configure Environment
+
+Copy `.env.example` to `.env` and provide your API keys and sensitive credentials.
 
 Required configurations in `.env`:
 - `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` - Database credentials
@@ -283,18 +298,18 @@ DB_SCHEMA=public              # Schema to query
 - [x] Intent routing (SQL vs. Knowledge Base)
 - [x] Retrieval-Augmented Generation for policy queries
 
-### 📅 Stage 4: Multi-Source Support
-- [x] MySQL connector (Ready for implementation)
-- [ ] BigQuery connector (Planned)
-- [ ] Cross-database query orchestration
-- [ ] Unified metadata schema management
+### ✅ Stage 4: Enterprise Expansion
+- [x] MySQL & SQLite connectors
+- [x] BigQuery & Redshift connectors
+- [x] DynamoDB (NoSQL) support
+- [x] Global constant centralization for enterprise safety
+- [x] Multi-source YAML configuration with env substitution
 
-### 📅 Stage 5: Production Features
-- [ ] Authentication & authorization
-- [ ] Query history and caching
-- [ ] Performance optimization
-- [ ] Advanced error handling
-- [ ] Monitoring and observability
+### 📅 Stage 5: Production Readiness
+- [ ] Authentication & RBAC
+- [ ] Query caching layer (Redis)
+- [ ] Performance monitoring with Prometheus/Grafana
+- [ ] Advanced result visualization (Charts/Graphs)
 
 ## 🐛 Troubleshooting
 
