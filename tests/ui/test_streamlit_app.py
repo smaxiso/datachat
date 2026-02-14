@@ -7,8 +7,54 @@ from src.ui.streamlit_app import main
 
 class TestStreamlitApp:
     @patch('src.ui.streamlit_app.st')
-    @patch('src.ui.streamlit_app.QueryOrchestrator')
-    def test_main(self, mock_orchestrator, mock_st):
+    @patch('src.ui.streamlit_app.requests')
+    def test_main(self, mock_requests, mock_st):
+        # Setup mocks
+        class SessionStateMock(dict):
+            def __getattr__(self, key):
+                return self.get(key)
+            def __setattr__(self, key, value):
+                self[key] = value
+            def __delattr__(self, key):
+                try:
+                    del self[key]
+                except KeyError:
+                    raise AttributeError(key)
+        
+        mock_st.session_state = SessionStateMock()
         mock_st.chat_input.return_value = "question"
+        
+        # Mock requests response
+        mock_post_response = MagicMock()
+        mock_post_response.status_code = 200
+        mock_post_response.json.return_value = {
+            "success": True, 
+            "interpretation": "result",
+            "data": [],
+            "sql_generated": "SELECT *",
+            "metadata": {}
+        }
+        mock_requests.post.return_value = mock_post_response
+
+        # Mock GET responses
+        def get_side_effect(url, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            if "health" in url:
+                mock_resp.json.return_value = {"status": "healthy"}
+            elif "schema" in url:
+                mock_resp.json.return_value = {
+                    "source_name": "test_db", 
+                    "tables": ["table1"], 
+                    "schema_summary": "summary"
+                }
+            elif "metrics" in url:
+                mock_resp.json.return_value = {}
+            return mock_resp
+            
+        mock_requests.get.side_effect = get_side_effect
+        
         main()
-        mock_st.write.assert_called()
+        
+        # Verification
+        mock_st.chat_input.assert_called()

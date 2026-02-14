@@ -54,11 +54,62 @@ class SchemaResponse(BaseModel):
     schema_summary: str
 
 
-# Initialize FastAPI app
+from contextlib import asynccontextmanager
+
+# Global orchestrator instance
+orchestrator: Optional[QueryOrchestrator] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for the FastAPI app."""
+    # Startup
+    global orchestrator
+    logger.info("Initializing GenAI Data Platform...")
+    
+    try:
+        # Initialize database connector
+        connector = ConnectorFactory.create_connector()
+        if not connector.connect():
+            logger.error(f"Failed to connect to database using factory")
+            # We continue to allow API to start, but it will be degraded
+        
+        # Initialize LLM provider
+        try:
+            llm = LLMFactory.create_provider()
+            logger.info(f"LLM Provider initialized: {llm.config.provider}")
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM provider: {e}")
+            llm = None
+        
+        # Initialize orchestrator
+        if llm and connector:
+            orchestrator = QueryOrchestrator(
+                connector=connector,
+                llm_provider=llm,
+                max_retries=int(os.getenv('MAX_RETRIES', 3))
+            )
+        else:
+            logger.warning("Orchestrator not initialized due to component failure")
+            
+        logger.info("Platform initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        # Don't raise, let app start in degraded mode
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down GenAI Data Platform...")
+    if orchestrator and orchestrator.connector:
+        orchestrator.connector.disconnect()
+
+# Initialize FastAPI app with lifespan
 app = FastAPI(
     title="DataChat",
     description="Natural language interface for data querying",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -69,58 +120,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global orchestrator instance (will be initialized on startup)
-orchestrator: Optional[QueryOrchestrator] = None
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize connections on startup."""
-    global orchestrator
-    
-    logger.info("Initializing GenAI Data Platform...")
-    
-    try:
-        # Initialize database connector using factory
-        connector = ConnectorFactory.create_connector()
-        if not connector.connect():
-            logger.error(f"Failed to connect to database using factory")
-            return
-        
-        # Initialize LLM provider using factory
-        # Factory handles loading config from env if not provided
-        try:
-            llm = LLMFactory.create_provider()
-            logger.info(f"LLM Provider initialized: {llm.config.provider}")
-        except Exception as e:
-            logger.error(f"Failed to initialize LLM provider: {e}")
-            # We don't return here to allow API to start even if LLM fails (health check will show degraded)
-            llm = None
-        
-        # Initialize orchestrator
-        if llm:
-            orchestrator = QueryOrchestrator(
-                connector=connector,
-                llm_provider=llm,
-                max_retries=int(os.getenv('MAX_RETRIES', 3))
-            )
-        else:
-            logger.warning("Orchestrator not initialized due to LLM failure")
-        
-        logger.info("Platform initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"Startup error: {e}")
-        raise
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Shutting down GenAI Data Platform...")
-    if orchestrator and orchestrator.connector:
-        orchestrator.connector.disconnect()
 
 
 @app.get("/", tags=["Root"])

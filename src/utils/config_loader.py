@@ -30,25 +30,28 @@ class ConfigLoader:
             with open(abs_path, 'r') as f:
                 content = f.read()
                 
-            # Expand environment variables using regex
-            # Pattern matches ${VAR_NAME} or $VAR_NAME
-            pattern = re.compile(r'\$\{([^}^{]+)\}')
-            
-            def replace_env(match):
-                env_var = match.group(1)
-                return os.environ.get(env_var, match.group(0)) # Return original string if env var not found? Or empty?
-                # Best practice: Keep literal if not found to avoid silent failures or maybe raise error?
-                # Let's keep literal for now to be safe against accidental matches, but log warning?
-                # Actually, standard env substitution usually replaces with empty string or default.
-                # Let's start with simple replacement.
-
-            expanded_content = pattern.sub(replace_env, content)
+            expanded_content = ConfigLoader.expand_env_vars(content)
             
             return yaml.safe_load(expanded_content) or {}
             
         except Exception as e:
             logger.error(f"Error loading config file {file_path}: {e}")
             return {}
+
+    @staticmethod
+    def expand_env_vars(content: str) -> str:
+        """
+        Expand environment variables in text.
+        Format: ${VAR_NAME}
+        """
+        # Pattern matches ${VAR_NAME}
+        pattern = re.compile(r'\$\{([^}^{]+)\}')
+        
+        def replace_env(match):
+            env_var = match.group(1)
+            return os.environ.get(env_var, match.group(0))
+
+        return pattern.sub(replace_env, content)
 
     @staticmethod
     def get_source_config(source_name: str) -> Optional[Dict[str, Any]]:

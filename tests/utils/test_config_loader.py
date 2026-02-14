@@ -10,7 +10,6 @@ from src.utils.config_loader import ConfigLoader
 class TestConfigLoader:
     def test_load_config_with_env_vars(self):
         with patch.dict(os.environ, {'TEST_VAR': 'value'}):
-            loader = ConfigLoader()
-            # testing expansion logic
-            result = loader._expand_env_vars("${TEST_VAR}")
+             # testing expansion logic
+            result = ConfigLoader.expand_env_vars("${TEST_VAR}")
             assert result == "value"
