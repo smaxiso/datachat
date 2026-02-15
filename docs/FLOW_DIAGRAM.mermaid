@@ -5,6 +5,8 @@ flowchart TD
     classDef component fill:#ffffff,stroke:#0277bd,stroke-dasharray: 5 5;
     classDef database fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
     classDef external fill:#fff3e0,stroke:#ef6c00,stroke-width:2px;
+    classDef security fill:#ffebee,stroke:#c62828,stroke-width:2px;
+    classDef obs fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
 
     %% Actors
     User((User)):::actor
@@ -24,10 +26,14 @@ flowchart TD
             direction TB
             FastAPI[FastAPI Server<br/>src/api/main.py]:::container
             
+            subgraph Security [Security Layer]
+                AuthService[Auth Service<br/>JWT / RBAC]:::security
+            end
+
             %% Core Logic Components
             subgraph Core_Logic [Orchestration Layer]
                 Orchestrator[Query Orchestrator<br/>src/orchestration]:::component
-                ConfigLoader[Config Loader<br/>sources.yaml]:::component
+                SelfCorrection[Self-Correction Loop]:::component
             end
 
             %% Factory Patterns
@@ -36,11 +42,22 @@ flowchart TD
                 ConnFactory[Connector Factory]:::component
             end
 
+            %% Performance & Persistence
+            subgraph Cache_Storage [Caching Layer]
+                Redis[(Redis Cache)]:::database
+            end
+            
             %% RAG Components
             subgraph RAG_System [RAG Engine]
-                Embeddings[Embedding Service<br/>SentenceTransformers]:::component
-                VectorDB[(ChromaDB<br/>Vector Store)]:::database
+                Embeddings[Embedding Service]:::component
+                VectorDB[(ChromaDB)]:::database
             end
+        end
+
+        %% Observability Subsystem
+        subgraph Monitoring [Observability]
+            Prom[Prometheus]:::obs
+            Grafana[Grafana]:::obs
         end
     end
 
@@ -49,41 +66,46 @@ flowchart TD
         direction LR
         OpenAI[OpenAI API]:::external
         Gemini[Google Gemini API]:::external
-        Anthropic[Anthropic Claude API]:::external
     end
 
     subgraph Data_Sources [Data Layer]
         direction LR
         PG[(PostgreSQL)]:::database
         MySQL[(MySQL)]:::database
-        BQ[(BigQuery)]:::database
-        RS[(Redshift)]:::database
-        DDB[(DynamoDB)]:::database
         SQLite[(SQLite)]:::database
+        BQ[(BigQuery)]:::database
     end
 
     %% Relationships / Data Flow
-    User -->|1. Asks Question| StreamlitApp
-    StreamlitApp -->|2. POST /api/query| FastAPI
+    User -->|1. Credentials / Query| StreamlitApp
+    StreamlitApp -->|2. POST /api/token| AuthService
+    AuthService -->|3. Valid Token| StreamlitApp
     
-    FastAPI -->|3. Delegate| Orchestrator
-    Orchestrator -->|4. Load Config| ConfigLoader
+    StreamlitApp -->|4. Authorized Query| FastAPI
+    FastAPI -->|5. Verify Permissions| AuthService
+    AuthService -->|6. OK| Orchestrator
     
-    %% RAG Flow
-    Orchestrator -.->|5a. Retrieve Context| RAG_System
-    RAG_System --> Embeddings
-    Embeddings --> VectorDB
-
-    %% LLM Generation Flow
-    Orchestrator -->|5b. Generate SQL| LLMFactory
-    LLMFactory --> OpenAI & Gemini & Anthropic
-
-    %% Data Execution Flow
-    Orchestrator -->|6. Execute SQL| ConnFactory
-    ConnFactory -->|Select Source| PG & MySQL & BQ & RS & DDB & SQLite
-
+    %% Caching Flow
+    Orchestrator -->|7. Check Cache| Redis
+    Redis -->|Hit| Orchestrator
+    
+    %% Main Execution Flow
+    Redis -->|Miss| RAG_System
+    RAG_System --> Orchestrator
+    Orchestrator -->|8. Generate SQL| LLMFactory
+    LLMFactory --> OpenAI & Gemini
+    
+    Orchestrator -->|9. Execute Query| ConnFactory
+    ConnFactory -->|10. SQL Results| Orchestrator
+    
+    %% Error Handling
+    Orchestrator -->|11. If SQL Fails| SelfCorrection
+    SelfCorrection -->|Retry| LLMFactory
+    
     %% Return Path
-    ConnFactory -->|7. Raw Data| Orchestrator
-    Orchestrator -->|8. Interpret Results| LLMFactory
-    Orchestrator -->|9. JSON Response| FastAPI
-    FastAPI -->|10. Render Results| StreamlitApp
+    Orchestrator -->|12. Store in Cache| Redis
+    Orchestrator -->|13. Response| StreamlitApp
+    
+    %% Observability Paths
+    FastAPI -.->|Metrics| Prom
+    Prom -.-> Grafana
