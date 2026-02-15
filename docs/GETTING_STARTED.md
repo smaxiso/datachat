@@ -46,7 +46,15 @@ This starter kit contains a complete, working implementation of a GenAI-powered 
 
 ## 🚀 Quick Start (5 Minutes)
 
-### Option 1: Automated Setup
+### Option 1: Docker (Recommended)
+
+Run the full platform including Redis, Prometheus, and Grafana:
+
+```bash
+docker-compose up --build
+```
+
+### Option 2: Automated Local Setup
 
 ```bash
 # Make the script executable (if not already)
@@ -62,7 +70,7 @@ This script will:
 3. Set up .env file
 4. Optionally create sample database
 
-### Option 2: Manual Setup
+### Option 3: Manual Local Setup
 
 ```bash
 # 1. Create virtual environment
@@ -76,14 +84,17 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your credentials
 
-# 4. Create sample database (optional)
+# 4. Start Redis (Required for Caching)
+docker run -d -p 6379:6379 redis:alpine
+
+# 5. Create sample database (optional)
 python scripts/setup_sample_db.py
 
-# 5. Start API server
+# 6. Start API server
 cd src/api
 python -m uvicorn main:app --reload
 
-# 6. Start UI (new terminal)
+# 7. Start UI (new terminal)
 source venv/bin/activate
 cd src/ui
 streamlit run streamlit_app.py
@@ -195,13 +206,13 @@ Expand data access:
 - Cross-database queries
 - Unified metadata layer
 
-### Stage 5: Production Features
+### ✅ Stage 5: Production Features
 Enterprise readiness:
-- Authentication & authorization
-- Query caching and history
-- Cost tracking and optimization
-- Monitoring dashboards
-- Advanced error recovery
+- [x] Authentication & authorization
+- [x] Query caching and history
+- [x] Cost tracking and optimization
+- [x] Monitoring dashboards
+- [x] Advanced error recovery
 
 ## 🧪 Testing
 

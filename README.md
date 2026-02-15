@@ -37,6 +37,7 @@ This platform acts as an intelligent interface layer between users and data infr
 │  │  • SQL Generation                            │   │
 │  │  • Validation & Execution                    │   │
 │  │  • Result Interpretation                     │   │
+│  │  • Caching (Redis) & Metrics                 │   │
 │  └──────────────────────────────────────────────┘   │
 └─────────┬────────────────────────┬──────────────────┘
           │                        │
@@ -49,6 +50,13 @@ This platform acts as an intelligent interface layer between users and data infr
     │  Gemini    │          │   Redshift     │
     │  Ollama    │          │   DynamoDB     │
     └────────────┘          └────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│                 Observability Stack                 │
+│  ┌──────────────┐   ┌────────────┐   ┌───────────┐  │
+│  │  Prometheus  │←──│  Metrics   │   │  Grafana  │  │
+│  └──────────────┘   └────────────┘   └───────────┘  │
+└─────────────────────────────────────────────────────┘
 ```
 
 > [!TIP]
@@ -56,110 +64,68 @@ This platform acts as an intelligent interface layer between users and data infr
 
 ## 📋 Prerequisites
 
-- Python 3.10 or higher
-- PostgreSQL database (or other supported database)
-- OpenAI API key (or other LLM provider)
-- 4GB+ RAM recommended
+- Docker & Docker Compose
+- OpenAI API Key (or other LLM provider key)
 
 ## 🚀 Quick Start
 
-### 1. Clone and Setup
+### 1. Clone and Configure
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd genai-data-platform
 
-# Create virtual environment
+# Create .env file
+cp .env.example .env
+```
+
+### 2. Configure Environment
+
+Edit `.env` and add your API keys:
+
+```bash
+OPENAI_API_KEY=sk-...your-key-here...
+# Database credentials if using external DB (optional for testing)
+```
+
+### 3. Run with Docker Compose
+
+The easiest way to run the full platform (API, UI, Redis, Prometheus, Grafana) is via Docker:
+
+```bash
+docker-compose up --build
+```
+
+### 4. Access the Platform
+
+- **Streamlit UI**: `http://localhost:8501`
+  - **Login**: `admin` / `admin` (Default mock credentials)
+- **FastAPI Docs**: `http://localhost:8000/docs`
+- **Grafana Dashboards**: `http://localhost:3000` (Default: `admin` / `admin`)
+- **Prometheus**: `http://localhost:9090`
+
+### 5. Manual Setup (Dev Mode)
+
+If you prefer running locally without Docker:
+
+```bash
+# Create venv
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Start Redis (Required)
+docker run -d -p 6379:6379 redis:alpine
+
+# Start API
+uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Start UI (New Terminal)
+streamlit run src/ui/streamlit_app.py
 ```
-
-### 2. Configure Sources
-
-DataChat uses a centralized configuration for multiple data sources. Edit `config/sources.yaml` to define your connections.
-
-```yaml
-# config/sources.yaml
-sources:
-  analytics_db:
-    type: postgres
-    config:
-      host: "${DB_HOST}"
-      database: "analytics"
-      # ...
-```
-
-### 3. Configure Environment
-
-Copy `.env.example` to `.env` and provide your API keys and sensitive credentials.
-
-Required configurations in `.env`:
-- `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` - Database credentials
-- `OPENAI_API_KEY` - Your OpenAI API key
-- Optional: Adjust `LLM_MODEL`, `LLM_TEMPERATURE`, etc.
-
-### 3. Prepare Database
-
-Ensure you have a PostgreSQL database with some data. Example schema:
-
-```sql
--- Example: Create a sample analytics database
-CREATE TABLE customers (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    email VARCHAR(100),
-    region VARCHAR(50)
-);
-
-CREATE TABLE orders (
-    id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES customers(id),
-    order_date DATE,
-    total_amount DECIMAL(10,2)
-);
-
--- Insert sample data
-INSERT INTO customers (name, email, region) VALUES
-    ('John Doe', 'john@example.com', 'North'),
-    ('Jane Smith', 'jane@example.com', 'South');
-
-INSERT INTO orders (customer_id, order_date, total_amount) VALUES
-    (1, '2024-01-15', 150.00),
-    (2, '2024-01-20', 200.00);
-```
-
-### 4. Start the API Server
-
-```bash
-# From project root
-cd src/api
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-API will be available at: `http://localhost:8000`
-- API docs: `http://localhost:8000/docs`
-- Health check: `http://localhost:8000/api/health`
-
-### 5. Start the UI (Optional)
-
-In a new terminal:
-
-### 5. Start with docs/GETTING_STARTED.md and you'll be up and running in minutes!al:
-
-```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Start Streamlit
-cd src/ui
-streamlit run streamlit_app.py
-```
-
-UI will be available at: `http://localhost:8501`
 
 ## 💡 Usage Examples
 
@@ -305,10 +271,10 @@ DB_SCHEMA=public              # Schema to query
 - [x] Global constant centralization for enterprise safety
 - [x] Multi-source YAML configuration with env substitution
 
-### 📅 Stage 5: Production Readiness
-- [ ] Authentication & RBAC
-- [ ] Query caching layer (Redis)
-- [ ] Performance monitoring with Prometheus/Grafana
+### ✅ Stage 5: Production Readiness
+- [x] Authentication & RBAC
+- [x] Query caching layer (Redis)
+- [x] Performance monitoring with Prometheus/Grafana
 - [ ] Advanced result visualization (Charts/Graphs)
 
 ## 🐛 Troubleshooting
